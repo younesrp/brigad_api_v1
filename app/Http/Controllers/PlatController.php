@@ -2,8 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Models\Plat;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class PlatController extends Controller
 {
@@ -21,15 +22,21 @@ class PlatController extends Controller
      */
     public function store(Request $request)
     {
-
         $request->validate([
-            'name' => 'required',
-            'description' => 'required',
-            'price' => 'required',
-            'category_id' => 'required',
+            'name' => 'required|string|max:255',
+            'description' => 'required|string',
+            'price' => 'required|numeric|min:0',
+            'category_id' => 'required|exists:categories,id',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
         ]);
 
-        $plat = Plat::create($request->all());
+        $data = $request->only(['name', 'description', 'price', 'category_id']);
+
+        if ($request->hasFile('image')) {
+            $data['image_path'] = $request->file('image')->store('plats', 'public');
+        }
+
+        $plat = Plat::create($data);
         return response()->json($plat, 201);
     }
 
@@ -49,14 +56,29 @@ class PlatController extends Controller
     {
         $plat = Plat::find($id);
 
+        if (!$plat) {
+            return response()->json(['message' => 'Plat not found'], 404);
+        }
+
         $request->validate([
-            'name' => 'required',
-            'description' => 'required',
-            'price' => 'required',
-            'category_id' => 'required',
+            'name' => 'required|string|max:255',
+            'description' => 'required|string',
+            'price' => 'required|numeric|min:0',
+            'category_id' => 'required|exists:categories,id',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
         ]);
-        
-        $plat->update($request->all());
+
+        $data = $request->only(['name', 'description', 'price', 'category_id']);
+
+        if ($request->hasFile('image')) {
+            if ($plat->image_path && Storage::disk('public')->exists($plat->image_path)) {
+                Storage::disk('public')->delete($plat->image_path);
+            }
+
+            $data['image_path'] = $request->file('image')->store('plats', 'public');
+        }
+
+        $plat->update($data);
         return response()->json($plat);
     }
 
@@ -66,7 +88,16 @@ class PlatController extends Controller
     public function destroy(string $id)
     {
         $plat = Plat::find($id);
+
+        if (!$plat) {
+            return response()->json(['message' => 'Plat not found'], 404);
+        }
+
+        if ($plat->image_path && Storage::disk('public')->exists($plat->image_path)) {
+            Storage::disk('public')->delete($plat->image_path);
+        }
+
         $plat->delete();
-        return response()->json(['message' => 'Plat supprimé avec succès'], 200);
+        return response()->json(['message' => 'Plat deleted successfully'], 200);
     }
 }
